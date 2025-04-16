@@ -20,4 +20,4 @@ ConversationSchema.index({ timestamp: -1 });
 ConversationSchema.index({ language: 1 });
 ConversationSchema.index({ sessionId: 1 });
 
-module.exports = mongoose.model('ConversationLog', ConversationSchema);
+module.exports = mongoose.model('ConversationLog', ConversationSchema, 'conversation_logs');
