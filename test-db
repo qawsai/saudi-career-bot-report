@@ -1,0 +1,12 @@
+// Add this to server.js
+app.get('/test-db', async (req, res) => {
+  try {
+    const collections = await mongoose.connection.db.listCollections().toArray();
+    res.json({ 
+      connected: mongoose.connection.readyState === 1,
+      collections: collections.map(c => c.name)
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
