@@ -4,7 +4,7 @@ const bodyParser = require('body-parser');
 const path = require('path');
 const cors = require('cors');
 const i18next = require('i18next');
-const i18nextMiddleware = require('i18next-http-middleware');
+const i18nextMiddleware = require('i18next-http-middleware') ;
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const multer = require('multer');
 const fs = require('fs');
@@ -12,18 +12,14 @@ const session = require('express-session');
 const cookieParser = require('cookie-parser');
 const { v4: uuidv4 } = require('uuid');
 
-// Import database connection
-const { connectDB } = require('./config/database');
-// Import conversation log model
-const ConversationLog = require('./models/ConversationLog');
-// Import admin routes
-const adminRoutes = require('./routes/adminRoutes');
-
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Connect to MongoDB
-connectDB();
+// Create logs directory if it doesn't exist
+const logsDir = path.join(__dirname, 'logs');
+if (!fs.existsSync(logsDir)) {
+  fs.mkdirSync(logsDir);
+}
 
 // Initialize Gemini API
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -54,6 +50,7 @@ app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/admin', express.static(path.join(__dirname, 'admin')));
 app.use(cookieParser());
+app.use(express.urlencoded({ extended: true })); // For parsing form data
 
 // Session middleware for admin authentication
 app.use(session({
@@ -180,6 +177,131 @@ function isCareerRelated(message, language) {
   return containsKeyword || containsQuestionWord;
 }
 
+// File-based logging functions
+function logConversation(data) {
+  try {
+    const logFile = path.join(logsDir, 'conversations.log');
+    const logEntry = JSON.stringify(data) + '\n';
+    fs.appendFileSync(logFile, logEntry);
+    return true;
+  } catch (error) {
+    console.error('Error logging conversation:', error);
+    return false;
+  }
+}
+
+function getConversationLogs(limit = 100, search = '', language = '', startDate = '', endDate = '') {
+  try {
+    const logFile = path.join(logsDir, 'conversations.log');
+    if (!fs.existsSync(logFile)) {
+      return [];
+    }
+    
+    const content = fs.readFileSync(logFile, 'utf8');
+    let logs = content.trim().split('\n').map(line => JSON.parse(line));
+    
+    // Apply filters
+    if (search) {
+      const searchLower = search.toLowerCase();
+      logs = logs.filter(log => 
+        log.userMessage.toLowerCase().includes(searchLower) || 
+        log.botResponse.toLowerCase().includes(searchLower)
+      );
+    }
+    
+    if (language) {
+      logs = logs.filter(log => log.language === language);
+    }
+    
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999); // End of day
+      
+      logs = logs.filter(log => {
+        const logDate = new Date(log.timestamp);
+        return logDate >= start && logDate <= end;
+      });
+    }
+    
+    // Sort by timestamp (newest first) and limit
+    logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    
+    return logs.slice(0, limit);
+  } catch (error) {
+    console.error('Error reading logs:', error);
+    return [];
+  }
+}
+
+function getConversationStats() {
+  try {
+    const logFile = path.join(logsDir, 'conversations.log');
+    if (!fs.existsSync(logFile)) {
+      return {
+        totalConversations: 0,
+        conversationsLastWeek: 0,
+        languageStats: [],
+        dailyStats: []
+      };
+    }
+    
+    const content = fs.readFileSync(logFile, 'utf8');
+    const logs = content.trim().split('\n').map(line => JSON.parse(line));
+    
+    // Calculate total conversations
+    const totalConversations = logs.length;
+    
+    // Calculate conversations in the last week
+    const lastWeekStart = new Date();
+    lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+    
+    const conversationsLastWeek = logs.filter(log => 
+      new Date(log.timestamp) >= lastWeekStart
+    ).length;
+    
+    // Calculate language statistics
+    const languageCounts = {};
+    logs.forEach(log => {
+      const lang = log.language;
+      languageCounts[lang] = (languageCounts[lang] || 0) + 1;
+    });
+    
+    const languageStats = Object.keys(languageCounts).map(lang => ({
+      _id: lang,
+      count: languageCounts[lang]
+    }));
+    
+    // Calculate daily statistics for the last week
+    const dailyCounts = {};
+    logs.filter(log => new Date(log.timestamp) >= lastWeekStart)
+      .forEach(log => {
+        const date = new Date(log.timestamp).toISOString().split('T')[0];
+        dailyCounts[date] = (dailyCounts[date] || 0) + 1;
+      });
+    
+    const dailyStats = Object.keys(dailyCounts).map(date => ({
+      _id: date,
+      count: dailyCounts[date]
+    })).sort((a, b) => a._id.localeCompare(b._id));
+    
+    return {
+      totalConversations,
+      conversationsLastWeek,
+      languageStats,
+      dailyStats
+    };
+  } catch (error) {
+    console.error('Error calculating stats:', error);
+    return {
+      totalConversations: 0,
+      conversationsLastWeek: 0,
+      languageStats: [],
+      dailyStats: []
+    };
+  }
+}
+
 // API endpoint for chat
 app.post('/api/chat', async (req, res) => {
   try {
@@ -231,28 +353,24 @@ app.post('/api/chat', async (req, res) => {
       res.cookie('sessionId', sessionId, { 
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
         httpOnly: true 
-      });
+      }) ;
     }
     
-    // Log conversation to MongoDB if connected
-    try {
-      await ConversationLog.create({
-        language,
-        userMessage: message,
-        botResponse: response,
-        isCareerRelated: careerRelated,
-        hasCvContext: !!hasCv,
-        sessionId,
-        metadata: {
-          userAgent: req.headers['user-agent'],
-          ipAddress: req.ip,
-          referrer: req.headers.referer || ''
-        }
-      });
-    } catch (dbError) {
-      console.error('Error logging conversation to MongoDB:', dbError);
-      // Continue even if logging fails
-    }
+    // Log conversation to file
+    logConversation({
+      timestamp: new Date().toISOString(),
+      language,
+      userMessage: message,
+      botResponse: response,
+      isCareerRelated: careerRelated,
+      hasCvContext: !!hasCv,
+      sessionId,
+      metadata: {
+        userAgent: req.headers['user-agent'],
+        ipAddress: req.ip,
+        referrer: req.headers.referer || ''
+      }
+    });
 
     res.json({ response, language });
   } catch (error) {
@@ -315,8 +433,64 @@ app.post('/api/analyze-cv', upload.single('cv'), async (req, res) => {
   }
 });
 
-// Mount admin routes
-app.use('/hadidi82', adminRoutes);
+// Admin authentication middleware
+const adminAuth = (req, res, next) => {
+  // Check for Basic Authentication header
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Basic ')) {
+    res.set('WWW-Authenticate', 'Basic realm="Admin Area"');
+    return res.status(401).send('Authentication required');
+  }
+  
+  // Decode credentials
+  const base64Credentials = authHeader.split(' ')[1];
+  const credentials = Buffer.from(base64Credentials, 'base64').toString('utf8');
+  const [username, password] = credentials.split(':');
+  
+  // Check credentials
+  if (username === process.env.ADMIN_USERNAME && password === process.env.ADMIN_PASSWORD) {
+    next();
+  } else {
+    res.set('WWW-Authenticate', 'Basic realm="Admin Area"');
+    return res.status(401).send('Invalid credentials');
+  }
+};
+
+// Admin routes
+app.get('/hadidi82', adminAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, 'admin', 'dashboard.html'));
+});
+
+app.get('/hadidi82/api/logs', adminAuth, (req, res) => {
+  const { page = 1, limit = 20, search = '', language = '', startDate = '', endDate = '' } = req.query;
+  
+  const logs = getConversationLogs(
+    parseInt(limit) * parseInt(page),
+    search,
+    language,
+    startDate,
+    endDate
+  );
+  
+  // Simple pagination
+  const total = logs.length;
+  const startIndex = (parseInt(page) - 1) * parseInt(limit);
+  const endIndex = startIndex + parseInt(limit);
+  const paginatedLogs = logs.slice(startIndex, endIndex);
+  
+  res.json({
+    logs: paginatedLogs,
+    totalPages: Math.ceil(total / parseInt(limit)),
+    currentPage: parseInt(page),
+    total
+  });
+});
+
+app.get('/hadidi82/api/stats', adminAuth, (req, res) => {
+  const stats = getConversationStats();
+  res.json(stats);
+});
 
 // Serve the main HTML file
 app.get('/', (req, res) => {
