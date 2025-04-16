@@ -19,9 +19,11 @@ router.get('/login', (req, res) => {
 // Admin login POST
 router.post('/login', (req, res) => {
   const { username, password } = req.body;
+  console.log('Login attempt:', { username, providedPassword: password, 
+    expectedUsername: process.env.ADMIN_USERNAME,
+    passwordMatch: password === process.env.ADMIN_PASSWORD });
   
   if (username === process.env.ADMIN_USERNAME && password === process.env.ADMIN_PASSWORD) {
-    // Create a session for the admin
     req.session.isAdmin = true;
     res.redirect('/hadidi82');
   } else {
