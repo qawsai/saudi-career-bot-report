@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Saudi Career Coach Assistant</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <div class="language-toggle">
+            <button id="en-toggle" class="active">English</button>
+            <button id="ar-toggle">العربية</button>
+        </div>
+        <div class="chat-container" id="chat-container">
+            <div class="chat-header">
+                <h1 id="header-title">Saudi Career Coach Assistant</h1>
+                <span id="header-subtitle">Your professional development partner</span>
+            </div>
+            <div class="chat-messages" id="chat-messages">
+                <div class="message-wrapper bot-message-wrapper">
+                    <div class="avatar bot-avatar">
+                        <i class="fas fa-robot"></i>
+                    </div>
+                    <div class="message bot-message" id="welcome-message">
+                        Hello! I'm your Career Coach Assistant specializing in the Saudi Arabian job market. I can help with career advice, job seeking strategies, interview preparation, and professional development. How can I assist you today?
+                    </div>
+                </div>
+            </div>
+            <div class="suggested-questions" id="suggested-questions">
+                <h3>Suggested Questions</h3>
+                <div class="questions-container">
+                    <button class="question-btn">How can I improve my CV?</button>
+                    <button class="question-btn">What are the top skills in demand?</button>
+                    <button class="question-btn">How to prepare for interviews?</button>
+                </div>
+            </div>
+            <div class="typing-indicator" id="typing-indicator">
+                <div class="dot"></div>
+                <div class="dot"></div>
+                <div class="dot"></div>
+            </div>
+            <div class="chat-input">
+                <div class="cv-upload-container">
+                    <label for="cv-upload" class="cv-upload-label">
+                        <i class="fas fa-file-upload"></i>
+                        <span id="upload-text">Upload CV</span>
+                    </label>
+                    <input type="file" id="cv-upload" accept=".pdf" hidden>
+                    <span id="file-name"></span>
+                </div>
+                <input type="text" id="user-input" placeholder="Ask about career advice, job seeking, interviews..." autocomplete="off">
+                <button id="send-button"><i class="fas fa-paper-plane"></i></button>
+            </div>
+        </div>
+        <div class="disclaimer" id="disclaimer">
+            This assistant is designed to provide career guidance for the Saudi Arabian job market only. For other topics, please consult appropriate resources.
+        </div>
+    </div>
+
+    <script src="/js/main.js"></script>
+</body>
+</html>

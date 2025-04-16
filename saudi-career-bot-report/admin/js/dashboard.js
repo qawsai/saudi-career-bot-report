@@ -1,0 +1,164 @@
+// Global state
+let currentPage = 1;
+let totalPages = 1;
+let currentFilters = {};
+
+// DOM Elements
+const totalConversationsEl = document.getElementById('total-conversations');
+const conversationsLastWeekEl = document.getElementById('conversations-last-week');
+const logsTableBody = document.getElementById('logs-table-body');
+const prevPageBtn = document.getElementById('prev-page');
+const nextPageBtn = document.getElementById('next-page');
+const pageInfoEl = document.getElementById('page-info');
+const searchInput = document.getElementById('search');
+const languageFilter = document.getElementById('language-filter');
+const startDateInput = document.getElementById('start-date');
+const endDateInput = document.getElementById('end-date');
+const searchBtn = document.getElementById('search-btn');
+
+// Charts
+let languageChart;
+let dailyChart;
+
+// Initialize the dashboard
+async function initDashboard() {
+  await fetchStats();
+  await fetchLogs();
+  
+  // Set up event listeners
+  searchBtn.addEventListener('click', () => {
+    currentPage = 1;
+    fetchLogs();
+  });
+  
+  prevPageBtn.addEventListener('click', () => {
+    if (currentPage > 1) {
+      currentPage--;
+      fetchLogs();
+    }
+  });
+  
+  nextPageBtn.addEventListener('click', () => {
+    if (currentPage < totalPages) {
+      currentPage++;
+      fetchLogs();
+    }
+  });
+}
+
+// Fetch statistics
+async function fetchStats() {
+  try {
+    const response = await fetch('/hadidi82/api/stats');
+    const data = await response.json();
+    
+    // Update stats
+    totalConversationsEl.textContent = data.totalConversations;
+    conversationsLastWeekEl.textContent = data.conversationsLastWeek;
+    
+    // Create language chart
+    const languageCtx = document.getElementById('language-chart').getContext('2d');
+    languageChart = new Chart(languageCtx, {
+      type: 'pie',
+      data: {
+        labels: data.languageStats.map(stat => stat._id === 'en' ? 'English' : 'Arabic'),
+        datasets: [{
+          data: data.languageStats.map(stat => stat.count),
+          backgroundColor: ['#36A2EB', '#FF6384']
+        }]
+      }
+    });
+    
+    // Create daily chart
+    const dailyCtx = document.getElementById('daily-chart').getContext('2d');
+    dailyChart = new Chart(dailyCtx, {
+      type: 'line',
+      data: {
+        labels: data.dailyStats.map(stat => stat._id),
+        datasets: [{
+          label: 'Conversations',
+          data: data.dailyStats.map(stat => stat.count),
+          borderColor: '#36A2EB',
+          tension: 0.1
+        }]
+      },
+      options: {
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              precision: 0
+            }
+          }
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching stats:', error);
+  }
+}
+
+// Fetch conversation logs
+async function fetchLogs() {
+  try {
+    // Build query parameters
+    const params = new URLSearchParams({
+      page: currentPage,
+      limit: 20
+    });
+    
+    if (searchInput.value) {
+      params.append('search', searchInput.value);
+    }
+    
+    if (languageFilter.value) {
+      params.append('language', languageFilter.value);
+    }
+    
+    if (startDateInput.value && endDateInput.value) {
+      params.append('startDate', startDateInput.value);
+      params.append('endDate', endDateInput.value);
+    }
+    
+    const response = await fetch(`/hadidi82/api/logs?${params.toString()}`);
+    const data = await response.json();
+    
+    // Update pagination
+    totalPages = data.totalPages;
+    currentPage = data.currentPage;
+    pageInfoEl.textContent = `Page ${currentPage} of ${totalPages}`;
+    prevPageBtn.disabled = currentPage <= 1;
+    nextPageBtn.disabled = currentPage >= totalPages;
+    
+    // Render logs
+    logsTableBody.innerHTML = '';
+    data.logs.forEach(log => {
+      const row = document.createElement('tr');
+      
+      const timeCell = document.createElement('td');
+      const date = new Date(log.timestamp);
+      timeCell.textContent = date.toLocaleString();
+      
+      const langCell = document.createElement('td');
+      langCell.textContent = log.language === 'en' ? 'English' : 'Arabic';
+      
+      const userMessageCell = document.createElement('td');
+      userMessageCell.textContent = log.userMessage;
+      
+      const botResponseCell = document.createElement('td');
+      botResponseCell.textContent = log.botResponse;
+      
+      row.appendChild(timeCell);
+      row.appendChild(langCell);
+      row.appendChild(userMessageCell);
+      row.appendChild(botResponseCell);
+      
+      logsTableBody.appendChild(row);
+    });
+  } catch (error) {
+    console.error('Error fetching logs:', error);
+  }
+}
+
+// Initialize the dashboard when the page loads
+document.addEventListener('DOMContentLoaded', initDashboard);
