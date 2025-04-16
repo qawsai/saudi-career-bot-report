@@ -1,12 +1,10 @@
 services:
   - type: web
-    name: saudi-career-bot-report  # Changed from saudia-career-bot
+    name: saudia-career-bot
     env: node
     buildCommand: npm install
     startCommand: node server.js
     envVars:
-      - key: MONGODB_URI
-        sync: false
       - key: ADMIN_USERNAME
         sync: false
       - key: ADMIN_PASSWORD
